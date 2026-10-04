@@ -1,5 +1,12 @@
 # FluidVoice
 
+This fork’s `codex/dictation-startup` branch is based on upstream v1.5.14. It warms
+Cohere during preparation, clears the loading label when preparation finishes, bounds
+slow focus capture and displays the recording panel immediately once audio is ready.
+The included [native timing helper](tools/README.md) verifies real microphone capture,
+visible recording pixels and text insertion. This branch is source/buildable code;
+upstream downloads below do not contain these changes. Streaming is unchanged.
+
 [![Supported Models](https://img.shields.io/badge/Models-Parakeet%20Flash%20%7C%20Parakeet%20v3%20%26%20v2%20%7C%20Cohere%20Transcribe%20%7C%20Apple%20Speech%20%7C%20Whisper-blue)](https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1)
 
 Fully open source voice-to-text dictation app for macOS with AI enhancement.

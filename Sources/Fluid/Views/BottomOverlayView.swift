@@ -52,6 +52,7 @@ final class BottomOverlayWindowController {
     }
 
     func show(audioPublisher: AnyPublisher<CGFloat, Never>, mode: OverlayMode) {
+        DebugLogger.shared.markTiming("overlay-show-begin")
         self.endReleaseTransition(flushDeferredUpdate: false)
         self.pendingResizeWorkItem?.cancel()
         self.pendingResizeWorkItem = nil
@@ -88,15 +89,13 @@ final class BottomOverlayWindowController {
         self.targetScreen = OverlayScreenResolver.screenForCurrentPointer()
         self.positionWindow()
 
-        // Show with animation
-        self.window?.alphaValue = 0
-        self.window?.orderFrontRegardless()
-
+        // Audio is ready: show the recording indicator immediately.
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.25
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            context.duration = 0
             self.window?.animator().alphaValue = 1
         }
+        self.window?.orderFrontRegardless()
+        DebugLogger.shared.markTiming("overlay-ordered")
     }
 
     func hide() {

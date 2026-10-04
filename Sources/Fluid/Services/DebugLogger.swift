@@ -121,6 +121,13 @@ class DebugLogger: ObservableObject {
         }
     }
 
+    // Opt-in monotonic stage timings; no app titles, audio or transcript content.
+    private static let timingEnabled = ProcessInfo.processInfo.environment["FLUID_DICTATION_TIMING"] == "1"
+    func markTiming(_ stage: String) {
+        guard Self.timingEnabled else { return }
+        self.debug("DICTATION_TIMING stage=\(stage) uptimeNs=\(DispatchTime.now().uptimeNanoseconds)", source: "StartTiming")
+    }
+
     func clear() {
         DispatchQueue.main.async {
             self.logs.removeAll()

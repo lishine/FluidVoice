@@ -79,6 +79,25 @@ final class DictationE2ETests: XCTestCase {
         )
     }
 
+    func testCoherePreparation_clearsLoadingBeforeFirstDictation() async throws {
+        let settings = SettingsStore.shared
+        let previous = settings.selectedSpeechModel
+        defer { settings.selectedSpeechModel = previous }
+        settings.selectedSpeechModel = .cohereTranscribeSixBit
+        let service = ASRService()
+        await service.checkIfModelsExistAsync()
+        guard service.modelsExistOnDisk else {
+            throw XCTSkip("Install the real 6-bit Cohere artifacts before running this check")
+        }
+        try await service.ensureAsrReady()
+        XCTAssertFalse(service.isLoadingModel, "Prepared model must not remain labelled as loading")
+        XCTAssertFalse(service.isDownloadingModel)
+        XCTAssertTrue(service.fileTranscriptionProvider.isReady)
+        let samples = try AudioFixtureLoader.load16kMonoFloatSamples(named: "dictation_fixture", ext: "wav")
+        let result = try await service.fileTranscriptionProvider.transcribe(samples)
+        XCTAssertEqual(Self.normalize(result.text).replacingOccurrences(of: " ", with: ""), "hellofluidvoice")
+    }
+
     func testAppPromptBinding_profileOverridesModeSelection() {
         self.withPromptSettingsRestored {
             let settings = SettingsStore.shared

@@ -112,7 +112,6 @@ final class ASRService: ObservableObject {
 
     private var isStarting: Bool = false // Guard against re-entrant start() calls
     private var downloadProgressTask: Task<Void, Never>?
-    private var hasCompletedFirstTranscription: Bool = false // Track if model has warmed up with first transcription
     private var lastBoostHitTerm: String?
     private var hasPendingParakeetVocabularyReload: Bool = false
     private let downloadRegistry = ModelDownloadRegistry()
@@ -432,7 +431,6 @@ final class ASRService: ObservableObject {
         self.isLoadingModel = false
         self.isDownloadingModel = false
         self.downloadProgress = nil
-        self.hasCompletedFirstTranscription = false // Reset warm-up state when switching models
         self.stopDownloadProgressMonitor()
         self.ensureReadyTask?.cancel()
         self.ensureReadyTask = nil
@@ -763,6 +761,7 @@ final class ASRService: ObservableObject {
     /// If audio session configuration fails, the method will silently fail
     /// and `isRunning` will remain `false`. Check the debug logs for details.
     func start() async {
+        DebugLogger.shared.markTiming("audio-start")
         DebugLogger.shared.info("🎤 START() called - beginning recording session", source: "ASRService")
 
         guard self.micStatus == .authorized else {
@@ -829,6 +828,7 @@ final class ASRService: ObservableObject {
                 }
             }
 
+            DebugLogger.shared.markTiming("audio-ready")
             self.isRunning = true
             DebugLogger.shared.info("✅ isRunning set to TRUE", source: "ASRService")
 
@@ -1076,14 +1076,6 @@ final class ASRService: ObservableObject {
                     "textChars=\(result.text.trimmingCharacters(in: .whitespacesAndNewlines).count) rtf=\(String(format: "%.3f", finalRTF)) streamedChunks=\(self.benchmarkCompletedStreamingChunks) source=\(finalSource)"
             )
 
-            // Mark first transcription as complete to clear loading state
-            if !self.hasCompletedFirstTranscription {
-                self.hasCompletedFirstTranscription = true
-                DispatchQueue.main.async {
-                    self.isLoadingModel = false
-                    DebugLogger.shared.info("✅ Model warmed up - first transcription completed", source: "ASRService")
-                }
-            }
 
             // Do not update self.finalText here to avoid instant binding insert in playground
             let cleanedText = ASRService.applyCustomDictionary(ASRService.removeFillerWords(result.text))
@@ -1105,15 +1097,6 @@ final class ASRService: ObservableObject {
             DebugLogger.shared.error("Error domain: \(nsError.domain), code: \(nsError.code)", source: "ASRService")
             DebugLogger.shared.error("Error userInfo: \(nsError.userInfo)", source: "ASRService")
 
-            // Clear loading state if this was the first transcription attempt
-            // This ensures the UI doesn't show a perpetual loading state on error
-            if !self.hasCompletedFirstTranscription {
-                self.hasCompletedFirstTranscription = true
-                DispatchQueue.main.async {
-                    self.isLoadingModel = false
-                    DebugLogger.shared.info("⚠️ First transcription failed - clearing loading state", source: "ASRService")
-                }
-            }
 
             // Note: We intentionally do NOT show an error popup here.
             // Common errors like "audio too short" are expected during normal use
@@ -2235,19 +2218,12 @@ final class ASRService: ObservableObject {
             let downloadDuration = Date().timeIntervalSince(downloadStartTime)
             DebugLogger.shared.info("✓ Provider preparation completed in \(String(format: "%.1f", downloadDuration)) seconds", source: "ASRService")
 
-            DispatchQueue.main.async {
-                self.isDownloadingModel = false
-                // Keep isLoadingModel true until first transcription completes (for large models that need warm-up)
-                if !self.hasCompletedFirstTranscription {
-                    self.isLoadingModel = true
-                    DebugLogger.shared.info("⏳ Model loaded, waiting for first transcription to complete...", source: "ASRService")
-                } else {
-                    self.isLoadingModel = false
-                }
-                self.downloadProgress = nil
-                self.stopDownloadProgressMonitor()
-                self.modelsExistOnDisk = true
-            }
+            // Already on MainActor: publish completed preparation before returning.
+            self.isDownloadingModel = false
+            self.isLoadingModel = false
+            self.downloadProgress = nil
+            self.stopDownloadProgressMonitor()
+            self.modelsExistOnDisk = true
 
             let totalDuration = Date().timeIntervalSince(initializationStart)
             DebugLogger.shared.info("=== ASR INITIALIZATION COMPLETE ===", source: "ASRService")
@@ -2585,14 +2561,6 @@ final class ASRService: ObservableObject {
             self.benchmarkCompletedStreamingChunks += 1
             self.lastProcessedSampleCount = chunk.count
 
-            // Mark first transcription as complete to clear loading state
-            if !self.hasCompletedFirstTranscription {
-                self.hasCompletedFirstTranscription = true
-                DispatchQueue.main.async {
-                    self.isLoadingModel = false
-                    DebugLogger.shared.info("✅ Model warmed up - first streaming transcription completed", source: "ASRService")
-                }
-            }
 
             if !newText.isEmpty {
                 // Smart diff: only show truly new words
