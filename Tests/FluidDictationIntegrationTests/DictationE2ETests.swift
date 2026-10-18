@@ -60,6 +60,12 @@ final class DictationE2ETests: XCTestCase {
         ]
     }
 
+    func testCohereDoesNotQueuePreviewInferenceBeforeFinalTranscription() {
+        XCTAssertFalse(SettingsStore.SpeechModel.cohereTranscribeSixBit.supportsStreaming)
+        XCTAssertTrue(SettingsStore.SpeechModel.parakeetRealtime.supportsStreaming)
+        XCTAssertTrue(SettingsStore.SpeechModel.nemotronStreaming.supportsStreaming)
+    }
+
     func testCoherePreparation_clearsLoadingBeforeFirstDictation() async throws {
         let settings = SettingsStore.shared
         let previous = settings.selectedSpeechModel

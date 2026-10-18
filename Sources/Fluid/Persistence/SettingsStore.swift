@@ -4537,6 +4537,9 @@ final class SettingsStore: ObservableObject {
         /// Large Whisper models are too slow for streaming, so they only do final transcription on stop.
         var supportsStreaming: Bool {
             switch self {
+            case .cohereTranscribeSixBit:
+                // Cohere previews repeat full inference and delay the final pass at Stop.
+                return false
             case .qwen3Asr, .whisperMedium, .whisperLargeTurbo, .whisperLarge:
                 return false // Too slow for real-time chunk processing
             default:
