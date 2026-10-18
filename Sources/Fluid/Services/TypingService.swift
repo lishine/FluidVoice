@@ -139,6 +139,8 @@ final class TypingService {
         }
 
         let systemWideElement = AXUIElementCreateSystemWide()
+        // Best-effort focus capture must not block microphone startup on a busy app.
+        AXUIElementSetMessagingTimeout(systemWideElement, 0.08)
         var focusedElementRef: CFTypeRef?
 
         let result = AXUIElementCopyAttributeValue(
@@ -146,6 +148,7 @@ final class TypingService {
             kAXFocusedUIElementAttribute as CFString,
             &focusedElementRef
         )
+        AXUIElementSetMessagingTimeout(systemWideElement, 0)
         guard result == .success, let focusedElementRef else {
             Self.storeFocusSnapshot(nil)
             return nil
@@ -163,10 +166,11 @@ final class TypingService {
             return nil
         }
         let appElement = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(appElement, 0.08)
         let window = Self.copyAXElementAttribute(from: appElement, attribute: kAXFocusedWindowAttribute as CFString)
             ?? Self.copyAXElementAttribute(from: appElement, attribute: kAXMainWindowAttribute as CFString)
         Self.storeFocusSnapshot(FocusSnapshot(pid: pid, window: window, element: element))
-        Self.logFocusState("[TypingService] Captured focus snapshot")
+        DebugLogger.shared.debug("Captured focus snapshot PID=\(pid)", source: "TypingService")
         return pid
     }
 

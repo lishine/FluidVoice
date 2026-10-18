@@ -74,8 +74,22 @@ final class ExternalCoreMLTranscriptionProvider: TranscriptionProvider {
             progressHandler?(.loading)
             try await manager.loadModels(from: directory, computeConfiguration: spec.computeConfiguration)
             try Task.checkCancellation()
-            self.cohereManager = manager
             self.persistCompiledCohereCacheStamp(at: directory)
+            // Warm the real decoder once before user dictation; never insert the fixture text.
+            if let warmup = Bundle.main.url(forResource: "dictation_warmup", withExtension: "wav") {
+                do {
+                    let promptIDs = self.coherePromptIDsForCurrentLanguage()
+                    _ = try await manager.transcribe(audioFileAt: warmup, promptIDs: promptIDs.isEmpty ? nil : promptIDs)
+                    DebugLogger.shared.info("Cohere decoder warm-up complete", source: "ExternalCoreML")
+                } catch {
+                    try Task.checkCancellation()
+                    DebugLogger.shared.warning("Cohere decoder warm-up failed (code=\((error as NSError).code)); loaded model remains available", source: "ExternalCoreML")
+                }
+            } else {
+                DebugLogger.shared.warning("Cohere decoder warm-up fixture missing; loaded model remains available", source: "ExternalCoreML")
+            }
+            try Task.checkCancellation()
+            self.cohereManager = manager
         }
 
         try Task.checkCancellation()

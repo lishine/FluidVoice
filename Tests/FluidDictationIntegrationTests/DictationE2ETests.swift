@@ -60,6 +60,29 @@ final class DictationE2ETests: XCTestCase {
         ]
     }
 
+    func testCoherePreparation_clearsLoadingBeforeFirstDictation() async throws {
+        let settings = SettingsStore.shared
+        let previous = settings.selectedSpeechModel
+        defer { settings.selectedSpeechModel = previous }
+        settings.selectedSpeechModel = .cohereTranscribeSixBit
+        let service = ASRService()
+        await service.checkIfModelsExistAsync()
+        guard service.modelsExistOnDisk else {
+            throw XCTSkip("Install the real 6-bit Cohere artifacts before running this check")
+        }
+        XCTAssertNotNil(Bundle.main.url(forResource: "dictation_warmup", withExtension: "wav"))
+        try await service.ensureAsrReady()
+        XCTAssertFalse(service.isLoadingModel)
+        XCTAssertFalse(service.isDownloadingModel)
+        XCTAssertNil(service.modelPreparationPhase)
+        XCTAssertTrue(service.fileTranscriptionProvider.isReady)
+        let samples = try AudioFixtureLoader.load16kMonoFloatSamples(named: "dictation_fixture", ext: "wav")
+        for _ in 0..<2 {
+            let result = try await service.fileTranscriptionProvider.transcribe(samples)
+            XCTAssertEqual(Self.normalize(result.text).replacingOccurrences(of: " ", with: ""), "hellofluidvoice")
+        }
+    }
+
     func testTranscriptionHistoryEntryClipboardTextPrefersProcessedText() {
         let entry = TranscriptionHistoryEntry(
             rawText: " raw transcript ",
